@@ -1,0 +1,12 @@
+# Docker构建时排除这些，减小上下文体积
+# 不然Docker daemon会把target/、.git/这些都传过去，慢死
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.log
+mvnw
+mvnw.cmd
+.mvn/
+README.md

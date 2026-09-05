@@ -1,0 +1,50 @@
+# 自己写的docker-compose，一键起MySQL+应用
+# 之前手动装MySQL手动建库太烦了，搜了下docker-compose能解决
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: log-monitor-mysql
+    # 为啥用host.docker.internal？因为应用容器要连MySQL容器，Docker网络里用服务名
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: log_monitor
+    ports:
+      - "3306:3306"
+    volumes:
+      # MySQL官方镜像会自动执行这个目录下的.sql文件（第一次启动时）
+      # 把schema.sql和data.sql挂进去，自动建表+插模拟数据
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./src/main/resources/data.sql:/docker-entrypoint-initdb.d/02-data.sql
+      # 数据持久化，不然容器删了数据就没了
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    container_name: log-monitor-app
+    ports:
+      - "8080:8080"
+    environment:
+      # 覆盖Spring Boot配置，用MySQL容器名作为host
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/log_monitor?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root123
+      # 环境标识，容器里跑标prod也行
+      LOG_ENV: dev
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

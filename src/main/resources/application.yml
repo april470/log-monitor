@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: log-monitor
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/log_monitor?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
+
+  thymeleaf:
+    cache: true
+    prefix: classpath:/templates/
+    suffix: .html
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.example.logmonitor.entity
+
+log:
+  slow:
+    threshold: 2000
+  p99:
+    sample-size: 100
+  env: dev
+
+ai:
+  api:
+    key: ${AI_API_KEY:}
+    url: ${AI_API_URL:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
+  model: ${AI_MODEL:qwen3.7-plus}
+  analyze-endpoint: ${AI_ANALYZE_ENDPOINT:}
+
+alarm:
+  error-rate-threshold: 10
+  window:
+    minutes: 5
+  slow-threshold: 2000
+  dingtalk:
+    webhook: ${DINGTALK_WEBHOOK:}
+  convergence:
+    minutes: 5
+  dashboard-url: ${DASHBOARD_URL:http://localhost:8080/logs}
+
+logging:
+  level:
+    com.example.logmonitor: DEBUG
+    org.springframework.web: INFO

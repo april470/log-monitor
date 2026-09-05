@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+    ============================================================
+    MyBatis XML映射文件
+    ============================================================
+    
+    MyBatis 动态SQL
+    
+    1. 常用标签：
+       - <if>: 条件判断，条件成立才拼接SQL
+       - <where>: 自动处理WHERE和AND，避免多余的AND
+       - <set>: 用于UPDATE语句，自动去除逗号
+       - <foreach>: 遍历集合（IN查询）
+       - <choose>/<when>/<otherwise>: 多条件分支
+       - <sql>: SQL片段复用
+       
+    2. 参数传递：
+       - #{param}: 预编译参数（安全，防SQL注入）
+       - ${param}: 直接拼接（不安全，仅用于ORDER BY等不能用预编译的场景）
+       - 本项目全部用#{}，保证安全
+       
+    3. <where>标签的作用：
+       - 自动在SQL前加WHERE关键字
+       - 自动去除开头的AND/OR
+       - 避免 "WHERE AND ..." 错误
+       
+    MyBatis # vs $ 区别
+    
+    - #{}: PreparedStatement预编译，参数化查询，防止SQL注入
+    - ${}: Statement直接拼接，不安全，存在SQL注入风险
+    - 什么时候用${}：ORDER BY字段名、表名等不能用?占位符的场景
+    - 本项目全部用#{}，非常安全
+    
+    MyBatis XML 配置
+    
+    - namespace: 必须与Mapper接口全限定名一致
+    - resultMap: 映射结果集到Java对象
+    - SQL ID: 必须与Mapper接口方法名一致
+-->
+<mapper namespace="com.example.logmonitor.mapper.InterfaceLogMapper">
+
+    <!-- 
+        结果映射：将数据库列映射到Java字段
+        列名与字段名不同时需要明确映射
+        本项目中，MP也可以自动映射（驼峰命名转换）
+    -->
+    <resultMap id="BaseResultMap" type="com.example.logmonitor.entity.InterfaceLog">
+        <id column="id" property="id"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="interface_name" property="interfaceName"/>
+        <result column="method" property="method"/>
+        <result column="request_params" property="requestParams"/>
+        <result column="response_data" property="responseData"/>
+        <result column="cost_time" property="costTime"/>
+        <result column="status" property="status"/>
+        <result column="error_msg" property="errorMsg"/>
+        <result column="create_time" property="createTime"/>
+        <result column="caller_ip" property="callerIp"/>
+        <result column="env" property="env"/>
+    </resultMap>
+
+    <!-- 
+        按状态分组统计（带动态条件）
+        <where>标签自动处理WHERE和AND前缀
+    -->
+    <select id="countByStatus" resultType="map">
+        SELECT status, COUNT(*) AS cnt
+        FROM interface_log
+        <where>
+            <if test="queryDTO.status != null">AND status = #{queryDTO.status}</if>
+            <if test="queryDTO.env != null">AND env = #{queryDTO.env}</if>
+            <if test="queryDTO.startTime != null">AND create_time >= #{queryDTO.startTime}</if>
+            <if test="queryDTO.endTime != null">AND create_time &lt;= #{queryDTO.endTime}</if>
+        </where>
+        GROUP BY status
+    </select>
+
+    <!-- 统计慢接口数量（带动态条件） -->
+    <select id="countSlow" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM interface_log
+        <where>
+            cost_time > #{queryDTO.slowThreshold}
+            <if test="queryDTO.status != null">AND status = #{queryDTO.status}</if>
+            <if test="queryDTO.env != null">AND env = #{queryDTO.env}</if>
+            <if test="queryDTO.startTime != null">AND create_time >= #{queryDTO.startTime}</if>
+            <if test="queryDTO.endTime != null">AND create_time &lt;= #{queryDTO.endTime}</if>
+        </where>
+    </select>
+
+    <!-- 
+        分页查询（带动态条件）
+        MP分页插件会自动拦截此SQL，添加LIMIT
+        keyword参数用于模糊搜索接口名和错误信息
+        
+         CONCAT函数
+        - MySQL中用于拼接字符串
+        - CONCAT('%', #{keyword}, '%') 实现模糊匹配
+        - 等价于 '%keyword%' 但使用预编译参数更安全
+    -->
+    <select id="selectPage" resultMap="BaseResultMap">
+        SELECT * FROM interface_log
+        <where>
+            <if test="queryDTO.status != null">AND status = #{queryDTO.status}</if>
+            <if test="queryDTO.env != null">AND env = #{queryDTO.env}</if>
+            <if test="queryDTO.keyword != null">
+                AND (interface_name LIKE CONCAT('%', #{queryDTO.keyword}, '%')
+                OR error_msg LIKE CONCAT('%', #{queryDTO.keyword}, '%'))
+            </if>
+            <if test="queryDTO.startTime != null">AND create_time >= #{queryDTO.startTime}</if>
+            <if test="queryDTO.endTime != null">AND create_time &lt;= #{queryDTO.endTime}</if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>接口日志监控平台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            min-height: 100vh;
+            font-size: 17px;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 48px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 40px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .header .badge {
+            display: inline-block;
+            padding: 8px 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border-radius: 20px;
+            font-size: 16px;
+            margin-left: 12px;
+        }
+        .refresh-btn {
+            padding: 12px 26px;
+            background: #fff;
+            border: 1px solid #d9d9d9;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #666;
+            font-size: 17px;
+        }
+        .refresh-btn:hover {
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+        }
+        .stat-card.total::before { background: linear-gradient(90deg, #10b981, #059669); }
+        .stat-card.success::before { background: linear-gradient(90deg, #11998e, #38ef7d); }
+        .stat-card.error::before { background: linear-gradient(90deg, #eb3349, #f45c43); }
+        .stat-card.slow::before { background: linear-gradient(90deg, #f2994a, #f2c94c); }
+
+        .stat-label {
+            font-size: 18px;
+            color: #8c8c8c;
+            margin-bottom: 14px;
+            font-weight: 500;
+        }
+        .stat-value {
+            font-size: 52px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .stat-card.success .stat-value { color: #11998e; }
+        .stat-card.error .stat-value { color: #eb3349; }
+        .stat-card.slow .stat-value { color: #f2994a; }
+        .stat-icon {
+            position: absolute;
+            right: 28px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 64px;
+            opacity: 0.1;
+        }
+
+        .filter-bar {
+            background: #fff;
+            border-radius: 16px;
+            padding: 28px 32px;
+            margin-bottom: 28px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .filter-form {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .filter-form input,
+        .filter-form select {
+            padding: 12px 18px;
+            border: 1px solid #d9d9d9;
+            border-radius: 10px;
+            font-size: 18px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .filter-form input:focus,
+        .filter-form select:focus {
+            border-color: #10b981;
+        }
+        .filter-form input[type="text"] {
+            width: 300px;
+        }
+        .btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .btn-default {
+            background: #fff;
+            color: #666;
+            border: 1px solid #d9d9d9;
+        }
+        .btn-default:hover {
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+        .table-container {
+            background: #fff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            margin-bottom: 28px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        th {
+            padding: 20px 24px;
+            text-align: left;
+            color: #fff;
+            font-weight: 600;
+            font-size: 18px;
+            white-space: nowrap;
+        }
+        td {
+            padding: 18px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 17px;
+            line-height: 1.7;
+        }
+        tbody tr {
+            transition: background-color 0.2s;
+        }
+        tbody tr:hover {
+            background-color: #f5f7fa;
+        }
+        .status-success {
+            display: inline-block;
+            padding: 5px 14px;
+            background: #e6fffb;
+            color: #11998e;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .status-error {
+            display: inline-block;
+            padding: 5px 14px;
+            background: #fff2f0;
+            color: #eb3349;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .cost-slow {
+            color: #eb3349;
+            font-weight: 700;
+            font-size: 19px;
+        }
+        .cost-fast {
+            color: #11998e;
+            font-size: 17px;
+        }
+        .cost-normal {
+            color: #333;
+            font-size: 17px;
+        }
+        .detail-link {
+            color: #10b981;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 17px;
+            transition: color 0.3s;
+        }
+        .detail-link:hover {
+            color: #059669;
+            text-decoration: underline;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            padding: 24px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .pagination button {
+            padding: 10px 22px;
+            border: 1px solid #d9d9d9;
+            background: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 17px;
+        }
+        .pagination button:hover:not(:disabled) {
+            border-color: #10b981;
+            color: #10b981;
+        }
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination .page-info {
+            margin: 0 18px;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .chart-container {
+            background: #fff;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .chart-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #1a1a1a;
+        }
+        #chart {
+            width: 100%;
+            height: 550px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #8c8c8c;
+        }
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 18px;
+        }
+        .empty-state div {
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .filter-form { flex-direction: column; align-items: stretch; }
+            .filter-form input[type="text"] { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>接口日志监控平台 <span class="badge">Real-time</span></h1>
+        <button class="refresh-btn" onclick="location.reload()">刷新</button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <div class="stat-label">总请求数</div>
+            <div class="stat-value" th:text="${total}">0</div>
+            <div class="stat-icon"></div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-label">成功</div>
+            <div class="stat-value" th:text="${successCount}">0</div>
+            <div class="stat-icon">✅</div>
+        </div>
+        <div class="stat-card error">
+            <div class="stat-label">失败</div>
+            <div class="stat-value" th:text="${errorCount}">0</div>
+            <div class="stat-icon">❌</div>
+        </div>
+        <div class="stat-card slow">
+            <div class="stat-label">慢接口</div>
+            <div class="stat-value" th:text="${slowCount}">0</div>
+            <div class="stat-icon"></div>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <form class="filter-form" action="/logs" method="get">
+            <input type="text" name="keyword" th:value="${currentKeyword}" placeholder="🔍 搜索接口名或错误信息">
+            <select name="status">
+                <option value="">全部状态</option>
+                <option value="SUCCESS" th:selected="${currentStatus == 'SUCCESS'}">成功</option>
+                <option value="ERROR" th:selected="${currentStatus == 'ERROR'}">失败</option>
+            </select>
+            <select name="slow">
+                <option value="">全部耗时</option>
+                <option value="true" th:selected="${currentSlow == 'true'}">慢接口</option>
+            </select>
+            <button type="submit" class="btn btn-primary">筛选</button>
+            <a href="/logs" class="btn btn-default" style="text-decoration: none; display: inline-block; text-align: center;">重置</a>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+            <tr>
+                <th>接口名称</th>
+                <th>方法</th>
+                <th>耗时(ms)</th>
+                <th>状态</th>
+                <th>错误信息</th>
+                <th>时间</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(logs)}">
+                <td colspan="7" class="empty-state">
+                    <div class="icon"></div>
+                    <div>暂无日志数据，请先调用测试接口生成日志</div>
+                </td>
+            </tr>
+            <tr th:each="log : ${logs}"
+                th:style="${log.costTime != null and log.costTime > 2000} ? 'background: #fff2f0;' : ''">
+                <td th:text="${log.interfaceName}">-</td>
+                <td th:text="${log.method}">-</td>
+                <td>
+                    <span th:if="${log.costTime != null and log.costTime > 2000}" class="cost-slow" th:text="${log.costTime}">0</span>
+                    <span th:elif="${log.costTime != null and log.costTime < 100}" class="cost-fast" th:text="${log.costTime}">0</span>
+                    <span th:else class="cost-normal" th:text="${log.costTime}">0</span>
+                </td>
+                <td>
+                    <span th:if="${log.status == 'SUCCESS'}" class="status-success">成功</span>
+                    <span th:unless="${log.status == 'SUCCESS'}" class="status-error">失败</span>
+                </td>
+                <td th:text="${log.errorMsg}">-</td>
+                <td th:text="${log.formattedCreateTime}">-</td>
+                <td>
+                    <a th:href="@{/logs/detail/{id}(id=${log.id})}" class="detail-link">查看详情 →</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination" th:if="${totalPages > 1}">
+        <button th:disabled="${!hasPrevious}" onclick="window.location.href='?pageNum=' + (${pageNum} - 1) + '&pageSize=' + ${pageSize} + '&status=' + encodeURIComponent('${currentStatus}')">← 上一页</button>
+        <span class="page-info">第 <span th:text="${pageNum}">1</span> / <span th:text="${totalPages}">1</span> 页</span>
+        <button th:disabled="${!hasNext}" onclick="window.location.href='?pageNum=' + (${pageNum} + 1) + '&pageSize=' + ${pageSize} + '&status=' + encodeURIComponent('${currentStatus}')">下一页 →</button>
+        <span class="page-info">共 <span th:text="${totalCount}">0</span> 条</span>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-title">📈 最近7天接口调用趋势</div>
+        <div id="chart"></div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    fetch('/logs/stats')
+        .then(response => response.json())
+        .then(data => {
+            const chart = echarts.init(document.getElementById('chart'));
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderColor: '#e8e8e8',
+                    borderWidth: 1,
+                    textStyle: { color: '#333', fontSize: 15 }
+                },
+                legend: {
+                    data: ['调用次数', '平均耗时(ms)'],
+                    top: 0,
+                    textStyle: { fontSize: 15 }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: data.days,
+                    axisLine: { lineStyle: { color: '#e8e8e8' } },
+                    axisLabel: { color: '#666', fontSize: 14 }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '调用次数',
+                        position: 'left',
+                        axisLine: { show: true, lineStyle: { color: '#10b981' } },
+                        axisLabel: { color: '#666', fontSize: 14 },
+                        splitLine: { lineStyle: { color: '#f0f0f0' } }
+                    },
+                    {
+                        type: 'value',
+                        name: '平均耗时(ms)',
+                        position: 'right',
+                        axisLine: { show: true, lineStyle: { color: '#f2994a' } },
+                        axisLabel: { color: '#666', fontSize: 14 },
+                        splitLine: { show: false }
+                    }
+                ],
+                series: [
+                    {
+                        name: '调用次数',
+                        type: 'bar',
+                        data: data.counts,
+                        barWidth: '40%',
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#10b981' },
+                                { offset: 1, color: '#059669' }
+                            ]),
+                            borderRadius: [4, 4, 0, 0]
+                        }
+                    },
+                    {
+                        name: '平均耗时(ms)',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        data: data.avgCosts,
+                        smooth: true,
+                        lineStyle: { width: 3, color: '#f2994a' },
+                        itemStyle: { color: '#f2994a' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(242,153,74,0.3)' },
+                                { offset: 1, color: 'rgba(242,153,74,0)' }
+                            ])
+                        }
+                    }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        })
+        .catch(err => console.error('加载图表数据失败:', err));
+</script>
+
+</body>
+</html>
